@@ -2,18 +2,26 @@ import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema/auth";
 import {
   createTRPCRouter,
-  adminProcedure,
-  createRoleProcedure,
+  protectedProcedure,
 } from "@/lib/trpc/init";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 
-// Example of using role-based procedures
+// Admin router with role checking in each procedure
 export const adminRouter = createTRPCRouter({
   // Only admins can access this
-  getSystemStats: adminProcedure.query(async () => {
+  getSystemStats: protectedProcedure.query(async ({ ctx }) => {
+    // Check if user is admin
+    if (ctx.session.user.role !== "admin") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Admin access required",
+      });
+    }
+
     const totalUsers = await db.select().from(user);
-    const adminUsers = totalUsers.filter(u => u.role === "admin");
+    const adminUsers = totalUsers.filter((u) => u.role === "admin");
     
     return {
       totalUsers: totalUsers.length,
@@ -23,20 +31,35 @@ export const adminRouter = createTRPCRouter({
   }),
   
   // Only admins can delete users
-  deleteUser: adminProcedure
+  deleteUser: protectedProcedure
     .input(z.object({ userId: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Check if user is admin
+      if (ctx.session.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Admin access required",
+        });
+      }
+
       return await db.delete(user).where(eq(user.id, input.userId));
     }),
   
   // Example: Only moderators or admins can access this
-  // You can create custom role procedures like this:
-  getModerationQueue: createRoleProcedure("moderator")
-    .query(async () => {
-      // Moderator-specific logic here
-      return {
-        pendingItems: [],
-        flaggedUsers: [],
-      };
-    }),
+  getModerationQueue: protectedProcedure.query(async ({ ctx }) => {
+    // Check if user has moderator or admin role
+    const userRole = ctx.session.user.role;
+    if (userRole !== "moderator" && userRole !== "admin") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Moderator access required",
+      });
+    }
+
+    // Moderator-specific logic here
+    return {
+      pendingItems: [],
+      flaggedUsers: [],
+    };
+  }),
 });

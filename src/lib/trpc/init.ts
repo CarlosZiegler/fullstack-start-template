@@ -70,32 +70,6 @@ export const protectedProcedure = t.procedure.use(sentryMiddleware).use(({ ctx, 
   return next();
 });
 
-export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.session.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Admin access required",
-      cause: "User is not an admin",
-    });
-  }
-  
-  return next();
-});
-
-export const createRoleProcedure = (requiredRole: string) => {
-  return protectedProcedure.use(({ ctx, next }) => {
-    if (ctx.session.user.role !== requiredRole && ctx.session.user.role !== "admin") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: `${requiredRole} access required`,
-        cause: `User role is ${ctx.session.user.role || "user"}, required role is ${requiredRole}`,
-      });
-    }
-    
-    return next();
-  });
-};
-
 /**
  * Create a router
  * @see https://trpc.io/docs/v11/router
