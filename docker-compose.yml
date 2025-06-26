@@ -1,6 +1,30 @@
 version: '3.8'
 
 services:
+  # NGINX Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: fullstack-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      - app
+    networks:
+      - app_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Main Application
   app:
     build:
       context: .
@@ -10,14 +34,14 @@ services:
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
         VITE_SENTRY_ORG: ${VITE_SENTRY_ORG}
         VITE_SENTRY_PROJECT: ${VITE_SENTRY_PROJECT}
-        VITE_SERVER_URL: ${VITE_SERVER_URL:-http://localhost:3000}
+        VITE_SERVER_URL: ${VITE_SERVER_URL:-http://localhost}
         SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
         DATABASE_URL: ${DATABASE_URL}
         BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
     image: fullstack-start-template:latest
     container_name: fullstack-app
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       # Runtime environment variables
       NODE_ENV: production
@@ -27,30 +51,25 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       VERCEL_API_KEY: ${VERCEL_API_KEY}
-      # NVIDIA GPU support
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
     volumes:
       # Optional: Mount for persistent data
       - app_data:/app/data
     networks:
       - app_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Optional: PostgreSQL database
+  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: fullstack-postgres
@@ -58,6 +77,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-fullstack}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -66,16 +86,17 @@ services:
       - app_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fullstack}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
-  # Optional: Redis for caching/sessions
+  # Redis for caching/sessions
   redis:
     image: redis:7-alpine
     container_name: fullstack-redis
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
     volumes:
       - redis_data:/data
     ports:
@@ -84,7 +105,7 @@ services:
       - app_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--pass", "${REDIS_PASSWORD:-redis_password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,7 +117,13 @@ volumes:
     driver: local
   redis_data:
     driver: local
+  nginx_cache:
+    driver: local
 
 networks:
   app_network:
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16

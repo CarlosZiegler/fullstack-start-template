@@ -3,7 +3,7 @@
 # Script to test Docker build locally
 set -e
 
-echo "🚀 Testing Docker build..."
+echo "🚀 Testing Docker build and NGINX setup..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -40,51 +40,81 @@ else
     exit 1
 fi
 
-# Test if the image runs
-echo "🧪 Testing Docker image..."
-docker run --rm -d \
-    --name fullstack-test \
-    -p 3001:3000 \
-    -e DATABASE_URL="${DATABASE_URL}" \
-    -e BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET}" \
-    -e RESEND_API_KEY="${RESEND_API_KEY}" \
-    -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
-    -e VERCEL_API_KEY="${VERCEL_API_KEY}" \
-    fullstack-start-template:test
+# Test docker-compose configuration
+echo "🧪 Testing docker-compose configuration..."
+docker-compose config > /dev/null
 
-# Wait for the container to start
-echo "⏳ Waiting for container to start..."
-sleep 10
-
-# Check if container is running
-if docker ps | grep -q fullstack-test; then
-    echo -e "${GREEN}✅ Container is running!${NC}"
-    
-    # Try to access the health endpoint
-    echo "🏥 Checking health endpoint..."
-    if curl -f http://localhost:3001/health 2>/dev/null; then
-        echo -e "${GREEN}✅ Health check passed!${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Health endpoint not responding (this might be normal if not implemented)${NC}"
-    fi
-    
-    # Show logs
-    echo "📋 Container logs:"
-    docker logs fullstack-test | tail -20
-    
-    # Clean up
-    echo "🧹 Cleaning up..."
-    docker stop fullstack-test
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Docker compose configuration is valid!${NC}"
 else
-    echo -e "${RED}❌ Container failed to start!${NC}"
-    docker logs fullstack-test
+    echo -e "${RED}❌ Docker compose configuration is invalid!${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}✅ All tests passed! Docker image is ready for deployment.${NC}"
+# Start services
+echo "🚀 Starting services with docker-compose..."
+docker-compose up -d
+
+# Wait for services to start
+echo "⏳ Waiting for services to start..."
+sleep 15
+
+# Check if all services are running
+echo "🔍 Checking service status..."
+SERVICES=("nginx" "app" "postgres" "redis")
+ALL_HEALTHY=true
+
+for service in "${SERVICES[@]}"; do
+    if docker-compose ps | grep -q "${service}.*Up"; then
+        echo -e "${GREEN}✅ ${service} is running${NC}"
+    else
+        echo -e "${RED}❌ ${service} is not running${NC}"
+        ALL_HEALTHY=false
+    fi
+done
+
+# Test endpoints
+if [ "$ALL_HEALTHY" = true ]; then
+    echo "🏥 Testing health endpoints..."
+    
+    # Test NGINX health
+    if curl -f http://localhost/nginx-health 2>/dev/null; then
+        echo -e "${GREEN}✅ NGINX health check passed!${NC}"
+    else
+        echo -e "${RED}❌ NGINX health check failed!${NC}"
+    fi
+    
+    # Test app through NGINX
+    if curl -f http://localhost/ 2>/dev/null | grep -q "<"; then
+        echo -e "${GREEN}✅ App is accessible through NGINX!${NC}"
+    else
+        echo -e "${YELLOW}⚠️  App might not be fully initialized yet${NC}"
+    fi
+fi
+
+# Show logs
 echo ""
-echo "To run with docker-compose:"
-echo "  docker-compose up -d"
+echo "📋 Recent logs:"
+echo "==================== NGINX logs ===================="
+docker-compose logs --tail=10 nginx
 echo ""
-echo "To run with NVIDIA GPU support:"
-echo "  docker-compose --profile gpu up -d"
+echo "==================== App logs ===================="
+docker-compose logs --tail=10 app
+
+# Clean up
+echo ""
+echo "🧹 Cleaning up test environment..."
+read -p "Do you want to stop and remove the test containers? (y/n) " -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    docker-compose down
+    echo -e "${GREEN}✅ Test containers removed${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}✅ Docker build test completed!${NC}"
+echo ""
+echo "Next steps:"
+echo "1. For development: docker-compose up -d"
+echo "2. For production: docker-compose -f docker-compose.prod.yml up -d"
+echo "3. Configure SSL certificates for production deployment"

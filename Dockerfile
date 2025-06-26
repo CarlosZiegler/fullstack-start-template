@@ -1,14 +1,10 @@
 # Stage 1: Dependencies
-FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04 AS deps
-
-# Install Node.js and Bun
-RUN apt-get update && apt-get install -y \
-    curl \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine AS deps
 
 # Install Bun
-RUN curl -fsSL https://bun.sh/install | bash
+RUN apk add --no-cache curl bash && \
+    curl -fsSL https://bun.sh/install | bash
+
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
@@ -20,16 +16,12 @@ COPY package.json bun.lockb* ./
 RUN bun install --frozen-lockfile
 
 # Stage 2: Builder
-FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04 AS builder
-
-# Install Node.js and Bun
-RUN apt-get update && apt-get install -y \
-    curl \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine AS builder
 
 # Install Bun
-RUN curl -fsSL https://bun.sh/install | bash
+RUN apk add --no-cache curl bash && \
+    curl -fsSL https://bun.sh/install | bash
+
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
@@ -63,33 +55,26 @@ ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
 RUN bun run build
 
 # Stage 3: Runtime
-FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04 AS runtime
+FROM node:20-alpine AS runtime
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js (for runtime)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
 
 WORKDIR /app
 
 # Create a non-root user
-RUN useradd -m -u 1001 -s /bin/bash appuser
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 # Copy built application from builder stage
-COPY --from=builder --chown=appuser:appuser /app/.output ./.output
-COPY --from=builder --chown=appuser:appuser /app/package.json ./package.json
+COPY --from=builder --chown=nodejs:nodejs /app/.output ./.output
+COPY --from=builder --chown=nodejs:nodejs /app/package.json ./package.json
 
 # Copy public assets if any
-COPY --from=builder --chown=appuser:appuser /app/public ./public
+COPY --from=builder --chown=nodejs:nodejs /app/public ./public
 
 # Switch to non-root user
-USER appuser
+USER nodejs
 
 # Expose the application port
 EXPOSE 3000
@@ -98,13 +83,12 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Enable NVIDIA GPU support
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
 CMD ["node", ".output/server/index.mjs"]
