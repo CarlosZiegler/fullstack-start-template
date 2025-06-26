@@ -1,1 +1,102 @@
-THIS SHOULD BE A LINTER ERROR
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Build-time environment variables
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
+        VITE_SENTRY_ORG: ${VITE_SENTRY_ORG}
+        VITE_SENTRY_PROJECT: ${VITE_SENTRY_PROJECT}
+        VITE_SERVER_URL: ${VITE_SERVER_URL:-http://localhost:3000}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
+        DATABASE_URL: ${DATABASE_URL}
+        BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+    image: fullstack-start-template:latest
+    container_name: fullstack-app
+    ports:
+      - "3000:3000"
+    environment:
+      # Runtime environment variables
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VERCEL_API_KEY: ${VERCEL_API_KEY}
+      # NVIDIA GPU support
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      # Optional: Mount for persistent data
+      - app_data:/app/data
+    networks:
+      - app_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fullstack-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fullstack}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Redis for caching/sessions
+  redis:
+    image: redis:7-alpine
+    container_name: fullstack-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  app_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
