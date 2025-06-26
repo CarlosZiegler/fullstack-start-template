@@ -8,12 +8,15 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
+// Type for user from database
+type DbUser = typeof user.$inferSelect;
+
 // Admin router with role checking in each procedure
 export const adminRouter = createTRPCRouter({
   // Only admins can access this
   getSystemStats: protectedProcedure.query(async ({ ctx }) => {
     // Check if user is admin
-    if (ctx.session.user.role !== "admin") {
+    if (!ctx.session || ctx.session.user.role !== "admin") {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Admin access required",
@@ -21,7 +24,7 @@ export const adminRouter = createTRPCRouter({
     }
 
     const totalUsers = await db.select().from(user);
-    const adminUsers = totalUsers.filter((u) => u.role === "admin");
+    const adminUsers = totalUsers.filter((u: DbUser) => u.role === "admin");
     
     return {
       totalUsers: totalUsers.length,
@@ -35,7 +38,7 @@ export const adminRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Check if user is admin
-      if (ctx.session.user.role !== "admin") {
+      if (!ctx.session || ctx.session.user.role !== "admin") {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Admin access required",
@@ -48,6 +51,13 @@ export const adminRouter = createTRPCRouter({
   // Example: Only moderators or admins can access this
   getModerationQueue: protectedProcedure.query(async ({ ctx }) => {
     // Check if user has moderator or admin role
+    if (!ctx.session) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Not authenticated",
+      });
+    }
+    
     const userRole = ctx.session.user.role;
     if (userRole !== "moderator" && userRole !== "admin") {
       throw new TRPCError({
@@ -58,8 +68,8 @@ export const adminRouter = createTRPCRouter({
 
     // Moderator-specific logic here
     return {
-      pendingItems: [],
-      flaggedUsers: [],
+      pendingItems: [] as Array<unknown>,
+      flaggedUsers: [] as Array<unknown>,
     };
   }),
 });

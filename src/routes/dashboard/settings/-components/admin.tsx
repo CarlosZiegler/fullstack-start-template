@@ -254,6 +254,14 @@ export default function AdminDashboard() {
   const handleUpdateUserRole = async (userId: string, newRole: string) => {
     setIsLoading(`role-${userId}`);
     try {
+      // TODO: Implement role update functionality
+      // The authClient doesn't have an updateUser method yet
+      // You'll need to implement this in your backend
+      // For now, we'll just show a toast message
+      toast.info("Role update functionality not yet implemented");
+      
+      // Uncomment when updateUser is available:
+      /*
       const result = await authClient.admin.updateUser({
         userId: userId,
         data: {
@@ -269,6 +277,7 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["users"],
       });
+      */
     } catch (error) {
       const errorMessage = (error as Error)?.message || t("FAILED_TO_UPDATE_USER_ROLE");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {

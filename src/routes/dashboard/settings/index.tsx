@@ -71,7 +71,7 @@ function RouteComponent() {
             </p>
           </div>
           <OrganizationCard
-            session={data?.session?.data}
+            session={data?.session?.data || null}
             activeOrganization={data?.organization?.data}
           />
         </section>

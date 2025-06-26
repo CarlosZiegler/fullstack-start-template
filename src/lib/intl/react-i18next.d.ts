@@ -1,8 +1,10 @@
-import type { resources } from "./resources";
+import type en from "./locales/en";
 
 declare module "react-i18next" {
   interface CustomTypeOptions {
     defaultNS: "translation";
-    resources: (typeof resources)["en"];
+    resources: {
+      translation: typeof en;
+    };
   }
 }
