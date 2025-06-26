@@ -36,6 +36,8 @@ export default {
   FAILED_TO_BAN_USER: "Failed to ban user",
   USER_UNBANNED_SUCCESS: "User unbanned successfully",
   FAILED_TO_UNBAN_USER: "Failed to unban user",
+  USER_ROLE_UPDATED_SUCCESS: "User role updated successfully",
+  FAILED_TO_UPDATE_USER_ROLE: "Failed to update user role",
   GO_BACK: "Go Back",
   RETRY: "Retry?",
   // Posts

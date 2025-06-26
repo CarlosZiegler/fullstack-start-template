@@ -35,6 +35,8 @@ export default {
   FAILED_TO_BAN_USER: "Fehler beim Sperren des Benutzers",
   USER_UNBANNED_SUCCESS: "Benutzer erfolgreich entsperrt",
   FAILED_TO_UNBAN_USER: "Fehler beim Entsperren des Benutzers",
+  USER_ROLE_UPDATED_SUCCESS: "Benutzerrolle erfolgreich aktualisiert",
+  FAILED_TO_UPDATE_USER_ROLE: "Fehler beim Aktualisieren der Benutzerrolle",
   GO_BACK: "Zurück",
   RETRY: "Wiederholen?",
   // Posts

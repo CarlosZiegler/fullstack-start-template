@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -238,6 +237,36 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUpdateUserRole = async (userId: string, newRole: string) => {
+    setIsLoading(`role-${userId}`);
+    try {
+      const result = await authClient.admin.updateUser({
+        userId: userId,
+        data: {
+          role: newRole,
+        },
+      });
+      
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      
+      toast.success(t("USER_ROLE_UPDATED_SUCCESS"));
+      queryClient.invalidateQueries({
+        queryKey: ["users"],
+      });
+    } catch (error: any) {
+      const errorMessage = error?.message || t("FAILED_TO_UPDATE_USER_ROLE");
+      if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
+        toast.error("Access denied. You don't have permission to update user roles.");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setIsLoading(undefined);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Toaster richColors />
@@ -435,7 +464,23 @@ export default function AdminDashboard() {
                   <TableRow key={user.id}>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.name}</TableCell>
-                    <TableCell>{user.role || "user"}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={user.role || "user"}
+                        onValueChange={(value) =>
+                          handleUpdateUserRole(user.id, value)
+                        }
+                        disabled={isLoading === `role-${user.id}`}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">{t("ADMIN")}</SelectItem>
+                          <SelectItem value="user">{t("USER")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>
                       {user.banned ? (
                         <Badge variant="destructive">{t("YES")}</Badge>
