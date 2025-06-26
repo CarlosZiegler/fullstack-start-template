@@ -48,8 +48,18 @@ import {
   AlertCircle,
   ShieldX,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Toaster, toast } from "sonner";
+
+// Type definition for User
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  role?: string | null;
+  banned?: boolean | null;
+  createdAt?: string | Date;
+}
 
 export default function AdminDashboard() {
   const queryClient = useQueryClient();
@@ -61,17 +71,21 @@ export default function AdminDashboard() {
     email: "",
     password: "",
     name: "",
-    role: "user" as const,
+    role: "user" as "user" | "admin",
   });
   const [isLoading, setIsLoading] = useState<string | undefined>();
   const [isBanDialogOpen, setIsBanDialogOpen] = useState(false);
-  const [banForm, setBanForm] = useState({
+  const [banForm, setBanForm] = useState<{
+    userId: string;
+    reason: string;
+    expirationDate: Date | undefined;
+  }>({
     userId: "",
     reason: "",
-    expirationDate: undefined as Date | undefined,
+    expirationDate: undefined,
   });
 
-  const { data: users, isLoading: isUsersLoading, error: usersError } = useQuery({
+  const { data: users, isLoading: isUsersLoading, error: usersError } = useQuery<User[], Error>({
     queryKey: ["users"],
     queryFn: async () => {
       const data = await authClient.admin.listUsers(
@@ -87,9 +101,9 @@ export default function AdminDashboard() {
         },
       );
 
-      return data?.users || [];
+      return (data?.users || []) as User[];
     },
-    retry: (failureCount, error: any) => {
+    retry: (failureCount: number, error: any) => {
       // Don't retry if it's a permission error
       if (error?.status === 403 || error?.message?.includes("forbidden")) {
         return false;
@@ -98,7 +112,7 @@ export default function AdminDashboard() {
     },
   });
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleCreateUser = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading("create");
     try {
@@ -120,8 +134,8 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["users"],
       });
-    } catch (error: any) {
-      const errorMessage = error?.message || t("FAILED_TO_CREATE_USER");
+    } catch (error) {
+      const errorMessage = (error as Error)?.message || t("FAILED_TO_CREATE_USER");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
         toast.error("Access denied. You don't have permission to create users.");
       } else {
@@ -145,8 +159,8 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["users"],
       });
-    } catch (error: any) {
-      const errorMessage = error?.message || t("FAILED_TO_DELETE_USER");
+    } catch (error) {
+      const errorMessage = (error as Error)?.message || t("FAILED_TO_DELETE_USER");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
         toast.error("Access denied. You don't have permission to delete users.");
       } else {
@@ -167,8 +181,8 @@ export default function AdminDashboard() {
       }
       
       toast.success(t("SESSIONS_REVOKED_SUCCESS"));
-    } catch (error: any) {
-      const errorMessage = error?.message || t("FAILED_TO_REVOKE_SESSIONS");
+    } catch (error) {
+      const errorMessage = (error as Error)?.message || t("FAILED_TO_REVOKE_SESSIONS");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
         toast.error("Access denied. You don't have permission to revoke user sessions.");
       } else {
@@ -190,8 +204,8 @@ export default function AdminDashboard() {
       
       toast.success(t("IMPERSONATED_USER"));
       navigate({ to: "/" });
-    } catch (error: any) {
-      const errorMessage = error?.message || t("FAILED_TO_IMPERSONATE_USER");
+    } catch (error) {
+      const errorMessage = (error as Error)?.message || t("FAILED_TO_IMPERSONATE_USER");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
         toast.error("Access denied. You don't have permission to impersonate users.");
       } else {
@@ -202,7 +216,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleBanUser = async (e: React.FormEvent) => {
+  const handleBanUser = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(`ban-${banForm.userId}`);
     try {
@@ -225,8 +239,8 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["users"],
       });
-    } catch (error: any) {
-      const errorMessage = error?.message || t("FAILED_TO_BAN_USER");
+    } catch (error) {
+      const errorMessage = (error as Error)?.message || t("FAILED_TO_BAN_USER");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
         toast.error("Access denied. You don't have permission to ban users.");
       } else {
@@ -255,8 +269,8 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["users"],
       });
-    } catch (error: any) {
-      const errorMessage = error?.message || t("FAILED_TO_UPDATE_USER_ROLE");
+    } catch (error) {
+      const errorMessage = (error as Error)?.message || t("FAILED_TO_UPDATE_USER_ROLE");
       if (errorMessage.includes("403") || errorMessage.includes("forbidden")) {
         toast.error("Access denied. You don't have permission to update user roles.");
       } else {
@@ -323,8 +337,8 @@ export default function AdminDashboard() {
                   <Label htmlFor="role">{t("ROLE")}</Label>
                   <Select
                     value={newUser.role}
-                    onValueChange={(value: "admin" | "user") =>
-                      setNewUser({ ...newUser, role: value })
+                    onValueChange={(value) =>
+                      setNewUser({ ...newUser, role: value as "user" | "admin" })
                     }
                   >
                     <SelectTrigger>
@@ -545,7 +559,7 @@ export default function AdminDashboard() {
                                   userId: user.id,
                                 },
                                 {
-                                  onError(context) {
+                                  onError(context: any) {
                                     toast.error(
                                       context.error.message ||
                                         t("FAILED_TO_UNBAN_USER"),
