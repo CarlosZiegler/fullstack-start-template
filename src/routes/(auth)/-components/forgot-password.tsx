@@ -1,4 +1,4 @@
-
+import FormFieldInfo from "@/components/form-field-info";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,32 +14,39 @@ import { Label } from "@/components/ui/label";
 import { useAuthHelpers } from "@/hooks/auth-hooks";
 import { authClient } from "@/lib/auth/auth-client";
 import { useTranslation } from "@/lib/intl/react";
+import { useForm } from "@tanstack/react-form";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+import * as z from "zod";
+
+const FormSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
 
 export default function ForgotPasswordForm() {
   const { t } = useTranslation();
   const { forgotPassword } = useAuthHelpers();
-  const [email, setEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError("");
-
-    try {
-      await forgotPassword.mutateAsync({ email });
-      setIsSubmitted(true);
-    } catch (err) {
-      setError("An error occurred. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const form = useForm({
+    defaultValues: {
+      email: "",
+    },
+    validators: {
+      onChange: FormSchema,
+    },
+    onSubmit: async ({ value }: any) => {
+      setError("");
+      try {
+        await forgotPassword.mutateAsync({ email: value.email });
+        setIsSubmitted(true);
+      } catch (err) {
+        setError("An error occurred. Please try again.");
+      }
+    },
+  });
 
   if (isSubmitted) {
     return (
@@ -77,17 +84,32 @@ export default function ForgotPasswordForm() {
           <CardDescription>{t("FORGOT_PASSWORD_DESC")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              form.handleSubmit();
+            }}
+          >
             <div className="grid w-full items-center gap-4">
               <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="email">{t("EMAIL")}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder={t("ENTER_EMAIL")}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                <form.Field
+                  name="email"
+                  children={(field) => (
+                    <>
+                      <Label htmlFor={field.name}>{t("EMAIL")}</Label>
+                      <Input
+                        id={field.name}
+                        type="email"
+                        placeholder={t("ENTER_EMAIL")}
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                      />
+                      <FormFieldInfo field={field} />
+                    </>
+                  )}
                 />
               </div>
             </div>
@@ -97,13 +119,20 @@ export default function ForgotPasswordForm() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <Button
-              className="w-full mt-4"
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? t("SENDING") : t("SEND_RESET_LINK")}
-            </Button>
+            <form.Subscribe
+              selector={(state) => [state.canSubmit, state.isSubmitting]}
+              children={([canSubmit, isSubmitting]) => (
+                <Button
+                  className="w-full mt-4"
+                  type="submit"
+                  disabled={!canSubmit || forgotPassword.isPending}
+                >
+                  {isSubmitting || forgotPassword.isPending
+                    ? t("SENDING")
+                    : t("SEND_RESET_LINK")}
+                </Button>
+              )}
+            />
           </form>
         </CardContent>
         <CardFooter className="flex justify-center">

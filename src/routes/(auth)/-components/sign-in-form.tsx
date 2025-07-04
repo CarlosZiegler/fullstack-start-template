@@ -1,4 +1,5 @@
-
+import FormFieldInfo from "@/components/form-field-info";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,22 +12,44 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLogin } from "@/hooks/auth-hooks";
+import { useForm } from "@tanstack/react-form";
+import * as z from "zod";
 
 import { useTranslation } from "@/lib/intl/react";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { Key, Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle, Key, Loader2 } from "lucide-react";
 import { useState } from "react";
+
+const FormSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean(),
+});
 
 export default function SignInForm() {
   const { t } = useTranslation();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const { loginWithCredentials, loginWithPasskey, loginWithSocial } =
     useLogin();
+
+  const form = useForm({
+    defaultValues: {
+      email: "",
+      password: "",
+      rememberMe: false,
+    },
+    validators: {
+      onChange: FormSchema,
+    },
+    onSubmit: async ({ value }) => {
+      loginWithCredentials.mutate({
+        email: value.email,
+        password: value.password,
+        rememberMe: value.rememberMe,
+      });
+    },
+  });
 
   return (
     <Card className="max-w-md w-full">
@@ -43,91 +66,127 @@ export default function SignInForm() {
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {loginWithCredentials.error.message || "Login failed. Please check your credentials and try again."}
+                {loginWithCredentials.error.message ||
+                  "Login failed. Please check your credentials and try again."}
               </AlertDescription>
             </Alert>
           )}
-          
+
           {loginWithPasskey.error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {loginWithPasskey.error.message || "Passkey authentication failed. Please try again."}
+                {loginWithPasskey.error.message ||
+                  "Passkey authentication failed. Please try again."}
               </AlertDescription>
             </Alert>
           )}
-          
+
           {loginWithSocial.error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {loginWithSocial.error.message || "Social login failed. Please try again."}
+                {loginWithSocial.error.message ||
+                  "Social login failed. Please try again."}
               </AlertDescription>
             </Alert>
           )}
-          <div className="grid gap-2">
-            <Label htmlFor="email">{t("EMAIL")}</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="m@example.com"
-              required
-              onChange={(e) => {
-                setEmail(e.target.value);
-              }}
-              value={email}
-            />
-          </div>
 
-          <div className="grid gap-2">
-            <div className="flex items-center">
-              <Label htmlFor="password">{t("PASSWORD")}</Label>
-              <Link
-                to="/forgot-password"
-                className="ml-auto inline-block text-sm underline"
-              >
-                {t("FORGOT_YOUR_PASSWORD")}
-              </Link>
-            </div>
-
-            <Input
-              id="password"
-              type="password"
-              placeholder="password"
-              autoComplete="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="remember"
-              onClick={() => {
-                setRememberMe(!rememberMe);
-              }}
-            />
-            <Label htmlFor="remember">{t("REMEMBER_ME")}</Label>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loginWithCredentials.isPending}
-            onClick={async () => {
-              loginWithCredentials.mutate({
-                email,
-                password,
-                rememberMe,
-              });
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              form.handleSubmit();
             }}
           >
-            {loginWithCredentials.isPending ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              t("LOGIN")
-            )}
-          </Button>
+            <div className="grid gap-2">
+              <form.Field
+                name="email"
+                children={(field) => (
+                  <>
+                    <Label htmlFor={field.name}>{t("EMAIL")}</Label>
+                    <Input
+                      id={field.name}
+                      type="email"
+                      placeholder="m@example.com"
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <FormFieldInfo field={field} />
+                  </>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <div className="flex items-center">
+                <Label htmlFor="password">{t("PASSWORD")}</Label>
+                <Link
+                  to="/forgot-password"
+                  className="ml-auto inline-block text-sm underline"
+                >
+                  {t("FORGOT_YOUR_PASSWORD")}
+                </Link>
+              </div>
+
+              <form.Field
+                name="password"
+                children={(field) => (
+                  <>
+                    <Input
+                      id={field.name}
+                      type="password"
+                      placeholder="password"
+                      autoComplete="password"
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <FormFieldInfo field={field} />
+                  </>
+                )}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <form.Field
+                name="rememberMe"
+                children={(field) => (
+                  <>
+                    <Checkbox
+                      id={field.name}
+                      checked={field.state.value}
+                      onCheckedChange={(checked) =>
+                        field.handleChange(!!checked)
+                      }
+                    />
+                    <Label htmlFor={field.name}>{t("REMEMBER_ME")}</Label>
+                  </>
+                )}
+              />
+            </div>
+
+            <form.Subscribe
+              selector={(state) => [state.canSubmit, state.isSubmitting]}
+              children={([canSubmit, isSubmitting]) => (
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!canSubmit || loginWithCredentials.isPending}
+                >
+                  {loginWithCredentials.isPending || isSubmitting ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    t("LOGIN")
+                  )}
+                </Button>
+              )}
+            />
+          </form>
 
           <Button
             variant="secondary"

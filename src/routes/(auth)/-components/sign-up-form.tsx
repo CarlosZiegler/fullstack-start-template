@@ -1,4 +1,4 @@
-
+import FormFieldInfo from "@/components/form-field-info";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,7 +10,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
+import * as z from "zod";
 
 import { Loader2, X } from "lucide-react";
 
@@ -19,22 +21,60 @@ import { useTranslation } from "@/lib/intl/react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 
+const FormSchema = z
+  .object({
+    firstName: z.string().min(2, "First name must be at least 2 characters"),
+    lastName: z.string().min(2, "Last name must be at least 2 characters"),
+    email: z.string().email("Please enter a valid email address"),
+    password: z.string().min(5, "Password must be at least 5 characters"),
+    passwordConfirmation: z.string(),
+    image: z.instanceof(File).optional(),
+  })
+  .refine((data: any) => data.password === data.passwordConfirmation, {
+    message: "The two passwords do not match.",
+    path: ["passwordConfirmation"],
+  });
+
 export function SignUpForm() {
   const { t } = useTranslation();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+
+  const form = useForm({
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      password: "",
+      passwordConfirmation: "",
+      image: undefined as File | undefined,
+    },
+    validators: {
+      onChange: FormSchema,
+    },
+    onSubmit: async ({ value }: any) => {
+      await authClient.signUp.email({
+        email: value.email,
+        password: value.password,
+        name: `${value.firstName} ${value.lastName}`,
+        image: value.image ? await convertImageToBase64(value.image) : "",
+        callbackURL: "/dashboard",
+        fetchOptions: {
+          onError: (ctx) => {
+            toast.error(ctx.error.message);
+          },
+          onSuccess: async () => {
+            navigate({ to: "/dashboard" });
+          },
+        },
+      });
+    },
+  });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setImage(file);
+      form.setFieldValue("image", file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -52,66 +92,114 @@ export function SignUpForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4">
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            form.handleSubmit();
+          }}
+        >
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="first-name">{t("FIRST_NAME")}</Label>
-              <Input
-                id="first-name"
-                placeholder="Max"
-                required
-                onChange={(e) => {
-                  setFirstName(e.target.value);
-                }}
-                value={firstName}
+              <form.Field
+                name="firstName"
+                children={(field) => (
+                  <>
+                    <Label htmlFor={field.name}>{t("FIRST_NAME")}</Label>
+                    <Input
+                      id={field.name}
+                      placeholder="Max"
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <FormFieldInfo field={field} />
+                  </>
+                )}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="last-name">{t("LAST_NAME")}</Label>
-              <Input
-                id="last-name"
-                placeholder="Robinson"
-                required
-                onChange={(e) => {
-                  setLastName(e.target.value);
-                }}
-                value={lastName}
+              <form.Field
+                name="lastName"
+                children={(field) => (
+                  <>
+                    <Label htmlFor={field.name}>{t("LAST_NAME")}</Label>
+                    <Input
+                      id={field.name}
+                      placeholder="Robinson"
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <FormFieldInfo field={field} />
+                  </>
+                )}
               />
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="email">{t("EMAIL")}</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="m@example.com"
-              required
-              onChange={(e) => {
-                setEmail(e.target.value);
-              }}
-              value={email}
+            <form.Field
+              name="email"
+              children={(field) => (
+                <>
+                  <Label htmlFor={field.name}>{t("EMAIL")}</Label>
+                  <Input
+                    id={field.name}
+                    type="email"
+                    placeholder="m@example.com"
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                  <FormFieldInfo field={field} />
+                </>
+              )}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">{t("PASSWORD")}</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              placeholder={t("PASSWORD")}
+            <form.Field
+              name="password"
+              children={(field) => (
+                <>
+                  <Label htmlFor={field.name}>{t("PASSWORD")}</Label>
+                  <Input
+                    id={field.name}
+                    type="password"
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    autoComplete="new-password"
+                    placeholder={t("PASSWORD")}
+                  />
+                  <FormFieldInfo field={field} />
+                </>
+              )}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">{t("CONFIRM_PASSWORD")}</Label>
-            <Input
-              id="password_confirmation"
-              type="password"
-              value={passwordConfirmation}
-              onChange={(e) => setPasswordConfirmation(e.target.value)}
-              autoComplete="new-password"
-              placeholder={t("CONFIRM_PASSWORD")}
+            <form.Field
+              name="passwordConfirmation"
+              children={(field) => (
+                <>
+                  <Label htmlFor={field.name}>{t("CONFIRM_PASSWORD")}</Label>
+                  <Input
+                    id={field.name}
+                    type="password"
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    autoComplete="new-password"
+                    placeholder={t("CONFIRM_PASSWORD")}
+                  />
+                  <FormFieldInfo field={field} />
+                </>
+              )}
             />
           </div>
           <div className="grid gap-2">
@@ -129,7 +217,7 @@ export function SignUpForm() {
                   <X
                     className="cursor-pointer"
                     onClick={() => {
-                      setImage(null);
+                      form.setFieldValue("image", undefined);
                       setImagePreview(null);
                     }}
                   />
@@ -137,41 +225,19 @@ export function SignUpForm() {
               </div>
             </div>
           </div>
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading}
-            onClick={async () => {
-              await authClient.signUp.email({
-                email,
-                password,
-                name: `${firstName} ${lastName}`,
-                image: image ? await convertImageToBase64(image) : "",
-                callbackURL: "/dashboard",
-                fetchOptions: {
-                  onResponse: () => {
-                    setLoading(false);
-                  },
-                  onRequest: () => {
-                    setLoading(true);
-                  },
-                  onError: (ctx) => {
-                    toast.error(ctx.error.message);
-                  },
-                  onSuccess: async () => {
-                    navigate({ to: "/dashboard" });
-                  },
-                },
-              });
-            }}
-          >
-            {loading ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              t("CREATE_ACCOUNT")
+          <form.Subscribe
+            selector={(state) => [state.canSubmit, state.isSubmitting]}
+            children={([canSubmit, isSubmitting]) => (
+              <Button type="submit" disabled={!canSubmit} className="w-full">
+                {isSubmitting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  t("CREATE_ACCOUNT")
+                )}
+              </Button>
             )}
-          </Button>
-        </div>
+          />
+        </form>
       </CardContent>
       <CardFooter>
         <div className="flex justify-center w-full border-t py-4">
