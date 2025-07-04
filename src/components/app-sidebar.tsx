@@ -58,6 +58,16 @@ const data = {
       icon: Settings2,
     },
     {
+      name: "Enhanced Settings",
+      url: "/dashboard/settings-enhanced",
+      icon: Settings2,
+    },
+    {
+      name: "Admin Users",
+      url: "/dashboard/admin/users",
+      icon: Command,
+    },
+    {
       name: "Chat",
       url: "/dashboard/chat",
       icon: MessageCircle,
